@@ -1,0 +1,5 @@
+# Get obfs4 bridges from https://bridges.torproject.org/ and paste them here,
+# one per line, in the form:
+# Bridge obfs4 <IP>:<PORT> <FINGERPRINT> cert=<CERT> iat-mode=0
+# Save as config/bridges/obfs4.conf, then run:
+#   ./install.sh --transport obfs4 --obfs4-bridges-file config/bridges/obfs4.conf
