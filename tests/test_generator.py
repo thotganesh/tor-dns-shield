@@ -27,7 +27,7 @@ for res,tr,ag,sp,cc in itertools.product(['quad9','adguard','cloudflare'],['snow
         ok &= 'ports' not in s['tor']
         t=r.stdout
         ok &= ('ExcludeExitNodes' in t)==(cc!='none')
-        ok &= ('snowflake-client' in t)==(tr=='snowflake') and ('lyrebird' in t)==(tr=='obfs4')
+        ok &= ('snowflake-client' in t)==(tr=='snowflake') and ('obfs4proxy' in t)==(tr=='obfs4')
         ok &= ('UseBridges 1' in t)==(tr!='direct')
     if not ok: print('FAIL combo',args); fails+=1
 print('combos run:',n)

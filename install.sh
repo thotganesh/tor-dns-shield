@@ -271,7 +271,7 @@ EOF
       printf '\nUseBridges 1\nClientTransportPlugin snowflake exec /usr/bin/snowflake-client\n'
       grep -v '^#' "$SCRIPT_DIR/config/bridges/snowflake.conf" | grep -v '^$' ;;
     obfs4)
-      printf '\nUseBridges 1\nClientTransportPlugin obfs4 exec /usr/bin/lyrebird\n'
+      printf '\nUseBridges 1\nClientTransportPlugin obfs4 exec /usr/bin/obfs4proxy\n'
       grep '^Bridge obfs4 ' "$OBFS4_FILE" ;;
     direct) : ;;
   esac

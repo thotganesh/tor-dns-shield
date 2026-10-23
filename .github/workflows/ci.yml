@@ -24,4 +24,4 @@ jobs:
           docker build -t tds-dnscrypt docker/dnscrypt
       - name: Tor ships GeoIP data and both transports
         run: |
-          docker run --rm --entrypoint sh tds-tor -c 'ls /usr/share/tor/geoip /usr/bin/snowflake-client /usr/bin/lyrebird'
+          docker run --rm --entrypoint sh tds-tor -c 'ls /usr/share/tor/geoip /usr/bin/snowflake-client /usr/bin/obfs4proxy'

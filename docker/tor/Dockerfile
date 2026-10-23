@@ -4,7 +4,7 @@
 FROM debian:trixie-slim
 
 RUN apt-get update \
- && apt-get install -y --no-install-recommends tor tor-geoipdb snowflake-client lyrebird ca-certificates curl \
+ && apt-get install -y --no-install-recommends tor tor-geoipdb snowflake-client obfs4proxy ca-certificates curl \
  && rm -rf /var/lib/apt/lists/*
 
 USER debian-tor
