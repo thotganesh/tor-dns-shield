@@ -1,5 +1,7 @@
 # tor-dns-shield
 
+> **Status: experimental (v0.1.0).** The generator and the Docker images are tested in CI, but the full chain (Tor bootstrap over Snowflake, DNS through Tor, AdGuard first run) has not yet been verified on a real machine. Please report problems in Issues.
+
 **Private DNS over Tor (Snowflake / obfs4 / direct), with per-country exit exclusion, optional AdGuard Home, and an optional volunteer Snowflake proxy.**
 
 One interactive script. You choose the countries whose exit nodes you want to avoid, the upstream resolver and the transport; it generates a `docker-compose.yml` and starts everything.
