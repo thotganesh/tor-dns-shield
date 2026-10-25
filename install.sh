@@ -252,6 +252,10 @@ gen_torrc() {
 DataDirectory /var/lib/tor
 Log notice stdout
 SocksPort 0.0.0.0:9050
+# 127.0.0.1 is allowed so checks run from inside the tor container itself
+# (e.g. scripts/selftest.sh, manual curl --socks5-hostname 127.0.0.1:9050)
+# are not silently dropped; it is not reachable from outside this host.
+SocksPolicy accept 127.0.0.1/32
 SocksPolicy accept ${SUBNET}
 SocksPolicy reject *
 ClientOnly 1
