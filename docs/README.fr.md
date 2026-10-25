@@ -59,9 +59,11 @@ sudo ./install.sh --non-interactive --countries fr,it --resolver quad9 --transpo
 
 - Le port 53 est publié sur `127.0.0.1`. Avec `--listen-ip` sur une adresse réseau, limitez l'accès par pare-feu, sinon vous exploitez un résolveur ouvert.
 - L'interface d'AdGuard est sur `127.0.0.1:3000` (utilisez un tunnel SSH).
+- AdGuard Home doit utiliser dnscrypt-proxy (`172.28.0.11:5353`) comme **seul** amont et n'avoir aucun DNS de secours : ses valeurs par défaut sont des connexions directes qui contournent Tor. En mode interactif, l'installateur ouvre l'assistant, attend que vous ayez terminé puis règle l'amont lui-même (`scripts/adguard-upstream.sh`, relançable). `scripts/selftest.sh` signale une erreur si l'amont ou le secours d'AdGuard contournent Tor.
+- **Si vous avez installé v0.1.0/v0.1.1 avec AdGuard :** l'amont par défaut était une connexion DoH *directe* vers Quad9, donc le DNS ne passait pas par Tor sauf modification manuelle. Mettez à jour et relancez `sudo ./install.sh`, ou exécutez `sudo /opt/tor-dns-shield/scripts/adguard-upstream.sh`.
 - Le SOCKS de Tor n'est jamais publié sur l'hôte.
 - `StrictNodes 1` : si aucun circuit ne peut être construit, le DNS s'arrête plutôt que d'utiliser des nœuds exclus. C'est voulu.
 
-Limites connues : une seule instance Tor (pas encore de basculement) ; AdGuard demande son assistant de première configuration ; les paramètres des bridges Snowflake changent avec le temps.
+Limites connues : une seule instance Tor (pas encore de basculement) ; AdGuard demande son assistant de première configuration (l'installateur l'ouvre, attend et règle l'amont ; avec `--non-interactive`, lancez ensuite `scripts/adguard-upstream.sh`) ; les paramètres des bridges Snowflake changent avec le temps.
 
 Licence MIT. Vous êtes responsable du respect des lois de votre pays.

@@ -4,7 +4,7 @@
 # Read this script before running it. It never pipes anything from the network into a shell.
 set -Eeuo pipefail
 
-VERSION="0.1.0"
+VERSION="0.1.2"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # ---------------------------------------------------------------- defaults
@@ -53,6 +53,7 @@ EOF
 
 die() { echo "ERROR: $*" >&2; exit 1; }
 info() { echo "==> $*"; }
+warn() { echo "WARNING: $*" >&2; }
 
 # ---------------------------------------------------------------- args
 while [[ $# -gt 0 ]]; do
@@ -418,6 +419,62 @@ EOF
   if [[ "$USE_ADGUARD" == "yes" ]]; then printf '  adguard-work:\n  adguard-conf:\n'; fi
 }
 
+# ---------------------------------------------------------------- AdGuard Home guided first run
+# AdGuard's wizard leaves its own default upstream (DoH to Quad9, reached DIRECTLY,
+# not through Tor). We wait for the wizard to finish, then force the upstream to
+# dnscrypt-proxy so DNS really goes through Tor.
+ADGUARD_DONE=0
+
+open_browser() {
+  local url="$1" u="${SUDO_USER:-}"
+  command -v xdg-open >/dev/null 2>&1 || return 0
+  [[ -n "$u" && "$u" != root ]] || return 0
+  sudo -u "$u" env DISPLAY="${DISPLAY:-:0}" xdg-open "$url" >/dev/null 2>&1 &
+  return 0
+}
+
+adguard_guided_setup() {
+  local url="http://127.0.0.1:3000"
+  local probe="test -f /opt/adguardhome/conf/AdGuardHome.yaml"
+  if ! docker exec tds-adguard sh -c "$probe" 2>/dev/null; then
+    cat <<MSG
+
+AdGuard Home needs a one-time setup (about 1 minute):
+  1. Open ${url}  (the installer tries to open it for you)
+  2. In the wizard keep DNS on port 53 and the admin UI on port 3000,
+     then choose a username and password.
+  3. Come back here: the installer detects it and finishes by itself.
+
+On a remote server, first run on your own PC:
+  ssh -L 3000:127.0.0.1:3000 user@server
+and then open ${url} there.
+
+MSG
+    open_browser "$url"
+    info "waiting for you to finish the wizard (up to 15 min). Press Enter to skip."
+    local found=0 rc
+    for _ in $(seq 1 180); do
+      if docker exec tds-adguard sh -c "$probe" 2>/dev/null; then found=1; break; fi
+      rc=0
+      read -r -t 5 </dev/tty || rc=$?
+      if [[ $rc -eq 0 ]]; then break; fi        # Enter pressed: skip
+      if [[ $rc -lt 128 ]]; then sleep 5; fi    # read failed (no tty): do not spin
+    done
+    if [[ $found -ne 1 ]]; then
+      warn "AdGuard wizard not completed. Until you finish it and run ${INSTALL_DIR}/scripts/adguard-upstream.sh, port 53 does NOT use Tor."
+      return 0
+    fi
+    sleep 3
+  fi
+  info "pointing AdGuard Home at dnscrypt-proxy (through Tor)"
+  if TDS_UPSTREAM="${IP_DNSCRYPT}:5353" "$INSTALL_DIR/scripts/adguard-upstream.sh"; then
+    ADGUARD_DONE=1
+  else
+    warn "could not set the AdGuard upstream automatically; run ${INSTALL_DIR}/scripts/adguard-upstream.sh"
+  fi
+  return 0
+}
+
 # ---------------------------------------------------------------- run
 info "tor-dns-shield ${VERSION}"
 info "excluded exit countries : ${EXCLUDE_NODES:-none}"
@@ -436,6 +493,8 @@ if [[ $DRY_RUN -eq 0 ]]; then
   mkdir -p "$INSTALL_DIR/scripts"
   cp "$SCRIPT_DIR/scripts/selftest.sh" "$INSTALL_DIR/scripts/selftest.sh"
   chmod +x "$INSTALL_DIR/scripts/selftest.sh"
+  cp "$SCRIPT_DIR/scripts/adguard-upstream.sh" "$INSTALL_DIR/scripts/adguard-upstream.sh"
+  chmod +x "$INSTALL_DIR/scripts/adguard-upstream.sh"
 fi
 
 gen_torrc     | write_file "$INSTALL_DIR/tor/torrc"
@@ -462,6 +521,10 @@ done
 cp "$SCRIPT_DIR/uninstall.sh" "$INSTALL_DIR/uninstall.sh"
 chmod +x "$INSTALL_DIR/uninstall.sh"
 
+if [[ "$USE_ADGUARD" == "yes" && $INTERACTIVE -eq 1 ]]; then
+  adguard_guided_setup
+fi
+
 info "running self-test"
 "$INSTALL_DIR/scripts/selftest.sh" || echo "Self-test reported problems: see messages above and 'docker logs tds-tor'."
 
@@ -469,14 +532,16 @@ cat <<EOF
 
 Done. DNS is published on ${LISTEN_IP}:53.
 EOF
-if [[ "$USE_ADGUARD" == "yes" ]]; then
+if [[ "$USE_ADGUARD" == "yes" && $ADGUARD_DONE -ne 1 ]]; then
   cat <<EOF
 
 AdGuard Home first-run setup:
   1. Open http://127.0.0.1:3000 (from a remote server: ssh -L 3000:127.0.0.1:3000 user@server).
   2. In the wizard keep the DNS listener on port 53 and the admin UI on port 3000.
-  3. In Settings > DNS settings set the upstream DNS server to:  ${IP_DNSCRYPT}:5353
-  4. Untick nothing else; leave "Parallel requests" off (a single upstream).
+  3. Then run: sudo ${INSTALL_DIR}/scripts/adguard-upstream.sh
+     (or set the upstream by hand in Settings > DNS settings to ${IP_DNSCRYPT}:5353)
+  IMPORTANT: until this is done AdGuard uses its own default upstream and your DNS
+  does NOT go through Tor.
 EOF
 fi
 cat <<EOF

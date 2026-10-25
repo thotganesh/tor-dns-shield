@@ -1,6 +1,8 @@
 # tor-dns-shield
 
-> **Status: v0.1.1.** The full chain (Tor bootstrap over Snowflake, DNS through Tor, AdGuard first run) has been verified end-to-end on a real Ubuntu host. This was exercised on a single machine/network so far — please still report problems in Issues, especially on different distros or network setups (corporate NAT, IPv6-only, etc.).
+> **Status: v0.1.2.** Verified on one Ubuntu VM / one network path: Tor bootstrap over Snowflake, dnscrypt-proxy resolving through Tor, and AdGuard Home forced onto dnscrypt-proxy (in a browser DNS-leak test the Quad9 location followed the Tor exit, as expected). Please report problems in Issues, especially on different distros or network setups (corporate NAT, IPv6-only, etc.).
+>
+> **If you installed v0.1.0/v0.1.1 with AdGuard Home:** its default upstream is a *direct* DoH connection to Quad9, so your DNS did **not** go through Tor unless you changed that setting by hand. Update and run `sudo ./install.sh` again, or run `sudo /opt/tor-dns-shield/scripts/adguard-upstream.sh`. See the CHANGELOG.
 
 **Private DNS over Tor (Snowflake / obfs4 / direct), with per-country exit exclusion, optional AdGuard Home, and an optional volunteer Snowflake proxy.**
 
@@ -115,6 +117,7 @@ dig example.com            # no @server specified: should still resolve via the 
 
 - Port 53 is published on `127.0.0.1` by default. If you set `--listen-ip` to a LAN or public address, restrict it with a firewall or you run an open resolver.
 - The AdGuard admin UI is bound to `127.0.0.1:3000`. Reach it through an SSH tunnel.
+- AdGuard Home must use dnscrypt-proxy as its **only** upstream (`172.28.0.11:5353`) and have no fallback DNS servers; its own defaults are direct connections that bypass Tor. In interactive mode the installer opens the setup wizard, waits for you to finish it and then sets this itself (`scripts/adguard-upstream.sh`, safe to re-run). `scripts/selftest.sh` fails if AdGuard's upstream or fallback would bypass Tor.
 - Tor SOCKS is bound to `0.0.0.0:9050` inside the `tor` container but never published to the host; `SocksPolicy` additionally restricts it to the Docker subnet and to `127.0.0.1` (the latter so in-container checks, e.g. `scripts/selftest.sh`, are not silently dropped). It is not reachable from outside this host either way.
 - Country exclusion uses Tor's GeoIP database, which may disagree with other databases. `StrictNodes 1` means a failure to build a circuit breaks DNS instead of falling back. This is deliberate. Note: with Snowflake/obfs4, `GeoIPExcludeUnknown` is intentionally **not** set, because pluggable-transport bridges use a placeholder address with no GeoIP country and would otherwise be discarded outright (see CHANGELOG, v0.1.1).
 - The resolver list (`public-resolvers.md`) is verified with minisign. To resolve the list's hostnames at first start, dnscrypt-proxy uses the bootstrap resolver `9.9.9.11` directly (not through Tor), so Quad9 can see that one lookup from your IP.
@@ -125,7 +128,7 @@ dig example.com            # no @server specified: should still resolve via the 
 - Single Tor instance. Failover between two instances is not implemented yet.
 - The Docker subnet `172.28.0.0/24` is fixed; if it clashes with a network you use, edit `SUBNET`/`IP_*` at the top of `install.sh`.
 - Verified so far on one Ubuntu VM / one network path (including over NAT'd/mobile tethering, where Snowflake's WebRTC rendezvous is slower but still completes). Different distros, routers or restrictive corporate networks may surface new issues — please report them.
-- AdGuard Home needs its first-run wizard in the browser; the installer prints the exact upstream to set.
+- AdGuard Home needs its first-run wizard in the browser. The installer opens it (best effort; on a server it prints the SSH-tunnel command), waits for you, then sets the upstream automatically. With `--non-interactive` it cannot wait: run `sudo /opt/tor-dns-shield/scripts/adguard-upstream.sh` after finishing the wizard.
 - Snowflake bridge parameters change; refresh `config/bridges/snowflake.conf` from Tor Browser if it stops connecting.
 - No automatic verification of the exit country yet.
 - Resolver names (`quad9-...`, `adguard-dns-doh`, `cloudflare`) must exist in the public resolver list; use `--resolver custom` if upstream renames them.

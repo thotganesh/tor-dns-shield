@@ -53,9 +53,11 @@ Con `--dry-run` vedi i file generati senza cambiare nulla. `--countries` accetta
 
 - La porta 53 è pubblicata su `127.0.0.1`. Se usi `--listen-ip` con un IP di rete, limita l'accesso con il firewall, altrimenti sei un open resolver.
 - L'interfaccia di AdGuard è su `127.0.0.1:3000` (usa un tunnel SSH).
+- AdGuard Home deve usare dnscrypt-proxy (`172.28.0.11:5353`) come **unico** upstream e non avere DNS di fallback: i suoi default sono connessioni dirette che aggirano Tor. In modalità interattiva l'installer apre il wizard, aspetta che tu finisca e imposta l'upstream da solo (`scripts/adguard-upstream.sh`, rieseguibile). `scripts/selftest.sh` segnala un errore se l'upstream o il fallback di AdGuard aggirano Tor.
+- **Se hai installato v0.1.0/v0.1.1 con AdGuard:** l'upstream predefinito era una connessione DoH *diretta* verso Quad9, quindi il DNS non passava da Tor a meno di averlo cambiato a mano. Aggiorna e rilancia `sudo ./install.sh`, oppure esegui `sudo /opt/tor-dns-shield/scripts/adguard-upstream.sh`.
 - Il SOCKS di Tor non è mai pubblicato sull'host.
 - `StrictNodes 1`: se non si riesce a costruire un circuito, il DNS si ferma invece di usare nodi esclusi. È voluto.
 
-Limiti noti: una sola istanza Tor (failover non ancora implementato); AdGuard richiede il wizard al primo avvio; i parametri dei bridge Snowflake cambiano nel tempo.
+Limiti noti: una sola istanza Tor (failover non ancora implementato); AdGuard richiede il wizard al primo avvio (l'installer lo apre, aspetta e imposta l'upstream; con `--non-interactive` esegui poi `scripts/adguard-upstream.sh`); i parametri dei bridge Snowflake cambiano nel tempo.
 
 Licenza MIT. Sei responsabile del rispetto delle leggi del tuo paese.

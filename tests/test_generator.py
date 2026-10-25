@@ -46,4 +46,19 @@ r=run([]); check('non-interactive defaults: snowflake proxy ON', 'snowflake-prox
 env=dict(os.environ,TDS_COUNTRIES='fr',TDS_SNOWFLAKE_PROXY='no')
 r=subprocess.run(['./install.sh','--dry-run','--non-interactive'],capture_output=True,text=True,env=env)
 check('env vars honoured', 'ExcludeExitNodes {fr}' in r.stdout and 'snowflake-proxy:' not in r.stdout)
+# every shell script must at least parse
+for sc in ['install.sh','uninstall.sh','scripts/selftest.sh','scripts/adguard-upstream.sh']:
+    check('bash -n '+sc, subprocess.run(['bash','-n',sc]).returncode==0)
+# regression: the AdGuard rewrite used by adguard-upstream.sh must force a single dnscrypt upstream
+src=open('scripts/adguard-upstream.sh').read()
+m=re.search(r"awk -v up=\"\$UPSTREAM\" '(.*?)' \"\$CONF", src, re.S)
+check('adguard-upstream.sh awk program found', m is not None)
+if m:
+    y="dns:\n  upstream_dns:\n    - https://dns10.quad9.net/dns-query\n    - tls://1.1.1.1\n  upstream_dns_file: \"\"\n  bootstrap_dns:\n    - 9.9.9.10\n  fallback_dns:\n    - 8.8.8.8\n  upstream_mode: load_balance\n"
+    r=subprocess.run(['awk','-v','up=172.28.0.11:5353',m.group(1)],input=y,capture_output=True,text=True)
+    d=yaml.safe_load(r.stdout)['dns']
+    check('adguard rewrite: single dnscrypt upstream', d['upstream_dns']==['172.28.0.11:5353'] and d['bootstrap_dns']==['172.28.0.11:5353'])
+    check('adguard rewrite: fallback cleared, other keys kept', d['fallback_dns']==[] and d['upstream_mode']=='load_balance')
+    r2=subprocess.run(['awk','-v','up=172.28.0.11:5353',m.group(1)],input=r.stdout,capture_output=True,text=True)
+    check('adguard rewrite: idempotent', r2.stdout==r.stdout)
 print('FAILS:',fails); sys.exit(1 if fails else 0)
