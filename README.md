@@ -1,6 +1,6 @@
 # tor-dns-shield
 
-> **Status: experimental (v0.1.0).** The generator and the Docker images are tested in CI, but the full chain (Tor bootstrap over Snowflake, DNS through Tor, AdGuard first run) has not yet been verified on a real machine. Please report problems in Issues.
+> **Status: v0.1.1.** The full chain (Tor bootstrap over Snowflake, DNS through Tor, AdGuard first run) has been verified end-to-end on a real Ubuntu host. This was exercised on a single machine/network so far — please still report problems in Issues, especially on different distros or network setups (corporate NAT, IPv6-only, etc.).
 
 **Private DNS over Tor (Snowflake / obfs4 / direct), with per-country exit exclusion, optional AdGuard Home, and an optional volunteer Snowflake proxy.**
 
@@ -54,6 +54,8 @@ sudo ./install.sh --non-interactive --countries fr,it --resolver quad9 \
 
 Preview without changing anything: add `--dry-run`.
 
+**Re-running the installer** (e.g. after `git pull`) is safe and does not need a fresh machine: it regenerates `torrc`, `dnscrypt-proxy.toml` and `docker-compose.yml` and runs `docker compose up -d --build`. Note that Compose does not always restart a container just because a file it mounts (like `torrc`) changed — if you don't see `Recreated`/`Started` in the output, run `docker restart tds-tor` to make sure the new config is actually loaded.
+
 ### Options
 
 | Option | Meaning |
@@ -67,6 +69,34 @@ Preview without changing anything: add `--dry-run`.
 | `--listen-ip IP` | Where port 53 is published (default `127.0.0.1`) |
 
 Each option also exists as an environment variable (`TDS_COUNTRIES`, `TDS_RESOLVER`, ...).
+
+## Using it: point your system at the resolver
+
+By default DNS is published on `127.0.0.1:53`. The installer does **not** touch your system's resolver configuration — you need to point it there yourself.
+
+Check nothing else is already bound to that address/port first:
+```bash
+sudo ss -tulpn | grep ':53'
+```
+
+**Quick manual test (no system change needed):**
+```bash
+dig @127.0.0.1 example.com
+```
+If this returns an answer, the chain works end to end — you don't need to change your system resolver just to verify it.
+
+**To actually use it for everything**, on a systemd-based distro (Ubuntu default):
+```bash
+sudo resolvectl dns <interface> 127.0.0.1
+sudo resolvectl domain <interface> '~.'
+```
+(`<interface>` is e.g. `eth0`; find yours with `ip -br link`.) This is temporary and reverts on reboot or reconnect. For a persistent change, edit the connection in NetworkManager (DNS field) or `/etc/systemd/resolved.conf` (`DNS=127.0.0.1`, `DNSStubListener=no`), then `sudo systemctl restart systemd-resolved`.
+
+Verify it is really being used, not bypassed:
+```bash
+resolvectl status          # should show 127.0.0.1 as the active DNS server
+dig example.com            # no @server specified: should still resolve via the chain
+```
 
 ## Snowflake: two different things
 
@@ -85,8 +115,8 @@ Each option also exists as an environment variable (`TDS_COUNTRIES`, `TDS_RESOLV
 
 - Port 53 is published on `127.0.0.1` by default. If you set `--listen-ip` to a LAN or public address, restrict it with a firewall or you run an open resolver.
 - The AdGuard admin UI is bound to `127.0.0.1:3000`. Reach it through an SSH tunnel.
-- Tor SOCKS is never published to the host.
-- Country exclusion uses Tor's GeoIP database, which may disagree with other databases. `StrictNodes 1` means a failure to build a circuit breaks DNS instead of falling back. This is deliberate.
+- Tor SOCKS is bound to `0.0.0.0:9050` inside the `tor` container but never published to the host; `SocksPolicy` additionally restricts it to the Docker subnet and to `127.0.0.1` (the latter so in-container checks, e.g. `scripts/selftest.sh`, are not silently dropped). It is not reachable from outside this host either way.
+- Country exclusion uses Tor's GeoIP database, which may disagree with other databases. `StrictNodes 1` means a failure to build a circuit breaks DNS instead of falling back. This is deliberate. Note: with Snowflake/obfs4, `GeoIPExcludeUnknown` is intentionally **not** set, because pluggable-transport bridges use a placeholder address with no GeoIP country and would otherwise be discarded outright (see CHANGELOG, v0.1.1).
 - The resolver list (`public-resolvers.md`) is verified with minisign. To resolve the list's hostnames at first start, dnscrypt-proxy uses the bootstrap resolver `9.9.9.11` directly (not through Tor), so Quad9 can see that one lookup from your IP.
 - Images for Tor and dnscrypt-proxy are built from `debian:trixie-slim` using Debian packages (including `tor-geoipdb`, which country exclusion needs). AdGuard Home and the Snowflake proxy use the official images (`adguard/adguardhome`, `thetorproject/snowflake-proxy`); pin them by digest if you need reproducibility.
 
@@ -94,7 +124,7 @@ Each option also exists as an environment variable (`TDS_COUNTRIES`, `TDS_RESOLV
 
 - Single Tor instance. Failover between two instances is not implemented yet.
 - The Docker subnet `172.28.0.0/24` is fixed; if it clashes with a network you use, edit `SUBNET`/`IP_*` at the top of `install.sh`.
-- The Docker build and the Tor/Snowflake bootstrap could not be exercised in the environment where this was written (no network): the generator is tested (`tests/`), the first real run on your server is the real test. Please report problems.
+- Verified so far on one Ubuntu VM / one network path (including over NAT'd/mobile tethering, where Snowflake's WebRTC rendezvous is slower but still completes). Different distros, routers or restrictive corporate networks may surface new issues — please report them.
 - AdGuard Home needs its first-run wizard in the browser; the installer prints the exact upstream to set.
 - Snowflake bridge parameters change; refresh `config/bridges/snowflake.conf` from Tor Browser if it stops connecting.
 - No automatic verification of the exit country yet.
