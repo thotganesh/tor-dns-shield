@@ -262,9 +262,16 @@ EOF
 
 # Never use exit nodes in these countries (GeoIP database of Tor; may differ from other GeoIP sources)
 ExcludeExitNodes ${EXCLUDE_NODES}
-GeoIPExcludeUnknown 1
 StrictNodes 1
 EOF
+    # GeoIPExcludeUnknown also rejects pluggable-transport bridges, which
+    # normally use a placeholder IP:port (the real endpoint is negotiated by
+    # the transport itself, e.g. Snowflake's broker/rendezvous). Those bridges
+    # have no country in any GeoIP database, so StrictNodes would discard them
+    # and Tor would never bootstrap. Only safe to enable in direct mode.
+    if [[ "$TRANSPORT" == "direct" ]]; then
+      printf 'GeoIPExcludeUnknown 1\n'
+    fi
   fi
   case "$TRANSPORT" in
     snowflake)
